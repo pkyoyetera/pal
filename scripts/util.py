@@ -1,5 +1,7 @@
 import traceback
+import signal
 
+from contextlib import contextmanager
 from typing import List, Optional, Tuple
 
 import pandas as pd
@@ -27,6 +29,20 @@ def read_json(path):
     return task_df
 
 
+# timeout code from https://stackoverflow.com/a/2281850/10930878
+@contextmanager
+def timeout(duration):
+    def timeout_handler(signum, frame):
+        raise TimeoutError(f"block timed out after {duration} seconds")
+
+    signal.signal(signal.SIGALRM, timeout_handler)
+    signal.alarm(duration)
+    try:
+        yield
+    finally:
+        signal.alarm(0)
+
+
 def format_response(solution: str) -> Optional[List[str]]:
     # getting the part that's got the solution in it:
     parts = [
@@ -39,14 +55,10 @@ def format_response(solution: str) -> Optional[List[str]]:
 
 
 def fix_function(solution: str) -> Optional[str]:
-    # read the solution string from the function definition to
-    # and just rely on black to format it correctly. Remove
-    # any print lines, and just return the solution
-
+    # rely on black to format it correctly  # bad idea
     try:
         formatted = format_str(solution[: solution.rfind("\n\n")], mode=FileMode())
-        # formatted = format_str(solution, mode=FileMode())
-    except black.parsing.InvalidInput as invalid:
+    except black.parsing.InvalidInput as ii:
         # logger.exception(invalid)
         # logger.error(f"Could not format:\n{solution}")
         return None
@@ -56,12 +68,14 @@ def fix_function(solution: str) -> Optional[str]:
     return formatted
 
 
-def exec_code(original_prompt: str, snippet: str) -> str | Exception:
-    """ """
-    # try to execute the code
+def exec_code(snippet: str) -> str:
+    """
+    Execute a code snippet
+    """
     local = {}
     try:
-        exec(snippet, globals(), local)
+        with timeout(2):
+            exec(snippet, globals(), local)
         return local["solution"]()
     except Exception as e:
         # logger.error(f"Error executing sample code:\n\n {sample}\n\n {e}")
@@ -83,7 +97,7 @@ def solve_question(
 
     for snippet in possible_snippets:
         try:
-            solution = exec_code(question_prompt, snippet)
+            solution = exec_code(snippet)
         except Exception:
             if depth >= 2:  # don't try more than twice
                 return False, depth
@@ -106,6 +120,10 @@ def solve_question(
 
             return solve_question(second_attempt, target, depth + 1)
 
-        if int(solution) == target:
-            return True, depth
+        try:
+            if int(solution) == target:
+                return True, depth
+        except TypeError as te:
+            # logger.error(te)
+            pass
         return False, depth

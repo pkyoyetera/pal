@@ -3,10 +3,7 @@ import logging
 import time
 
 import json
-import signal
 
-
-from contextlib import contextmanager
 from tqdm.auto import tqdm
 
 import pal.prompt.zero_shot_math_prompt
@@ -23,28 +20,14 @@ logger = logging.getLogger()  # get the root logger
 logger.info(f"Starting run at: {time.time()}")
 
 
-# borrowed from PAL codebase
-@contextmanager
-def timeout(duration):
-    def timeout_handler(signum, frame):
-        raise TimeoutError(f"block timed out after {duration} seconds")
-
-    signal.signal(signal.SIGALRM, timeout_handler)
-    signal.alarm(duration)
-    try:
-        yield
-    finally:
-        signal.alarm(0)
-
-
 def evaluate_prompts(path: str, out_file_path: str, result_loc: str):
     # open file to save results of successful prompts
     out_file = open(out_file_path, "w")
     assert out_file
 
     # file to save raw results from model
-    result_file = open(result_loc, "w")
-    assert result_file
+    # result_file = open(result_loc, "w")
+    # assert result_file
 
     gsm_data = read_json(path)
 
@@ -88,12 +71,12 @@ def evaluate_prompts(path: str, out_file_path: str, result_loc: str):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--path", type=str, default="datasets/gsm_test_set.jsonl")
+    parser.add_argument("--path", type=str, default="datasets/gsm.jsonl")
     parser.add_argument(
-        "--output", type=str, default="datasets/outputs/one_shot_gsm_sample.jsonl"
+        "--output", type=str, default="datasets/outputs/gsm_multiple_attempts.jsonl"
     )
     # parser.add_argument("--save_returned_prompts", type=bool, default=True)
-    parser.add_argument("--loc", type=str, default="logs/returned_prompts_test_set.txt")
+    parser.add_argument("--loc", type=str, default="logs/multiple_tries.txt")
     args = parser.parse_args()
 
     evaluate_prompts(args.path, args.output, args.loc)
